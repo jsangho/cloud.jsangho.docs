@@ -4,11 +4,11 @@
     "type": "split",
     "children": [
       {
-        "id": "b38a578472fa552f",
+        "id": "0bc8e46b645b36af",
         "type": "tabs",
         "children": [
           {
-            "id": "6011219ef2168788",
+            "id": "27c59b7b4717f51e",
             "type": "leaf",
             "state": {
               "type": "empty",
@@ -74,8 +74,7 @@
       }
     ],
     "direction": "horizontal",
-    "width": 300,
-    "collapsed": true
+    "width": 300
   },
   "right": {
     "id": "c57ab9b4c62fe178",
@@ -180,10 +179,12 @@
       "bases:새 베이스 생성하기": false
     }
   },
-  "active": "6011219ef2168788",
+  "active": "e031bf14a1f94f9a",
   "lastOpenFiles": [
+    "용어 정리.md",
+    "260515.md",
+    "환영합니다!.md",
     "케이페이브 프론트엔드 설정.md",
-    "2026-05-14.md",
     "무제.canvas",
     "Untitled",
     "무제 2.canvas",
