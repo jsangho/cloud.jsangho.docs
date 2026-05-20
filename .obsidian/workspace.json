@@ -4,17 +4,17 @@
     "type": "split",
     "children": [
       {
-        "id": "0bc8e46b645b36af",
+        "id": "63a3e55b95d6fd5f",
         "type": "tabs",
         "children": [
           {
-            "id": "27c59b7b4717f51e",
+            "id": "d8eade65abeedb41",
             "type": "leaf",
             "state": {
-              "type": "empty",
+              "type": "graph",
               "state": {},
-              "icon": "lucide-file",
-              "title": "새 탭"
+              "icon": "lucide-git-fork",
+              "title": "그래프 뷰"
             }
           }
         ]
@@ -179,13 +179,18 @@
       "bases:새 베이스 생성하기": false
     }
   },
-  "active": "e031bf14a1f94f9a",
+  "active": "d8eade65abeedb41",
   "lastOpenFiles": [
+    "케이페이브개발/260514_케이페이브 프론트엔드 설정.md",
+    "케이페이브개발/260506_kayfabe_app_naming.md",
+    "케이페이브개발/260506_kayfabe_flutterflow_screens.md",
+    "무제.canvas",
+    "README.md",
+    "DevOps/Frontend/REACT_RULES.md",
+    "환영합니다!.md",
     "용어 정리.md",
     "260515.md",
-    "환영합니다!.md",
     "케이페이브 프론트엔드 설정.md",
-    "무제.canvas",
     "Untitled",
     "무제 2.canvas",
     "무제 1.canvas"

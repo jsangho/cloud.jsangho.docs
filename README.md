@@ -10,7 +10,8 @@ Cursor·에이전트는 **코드를 작성·수정하기 전에** 이 디렉터�
 | 영역 | 경로 | 적용 범위 |
 |------|------|-----------|
 | Frontend (React/Next.js) | [`DevOps/Frontend/REACT_RULES.md`](DevOps/Frontend/REACT_RULES.md) | `frontend/` 하위 TSX·TS |
-| Backend (FastAPI/Python) | [`DevOps/Backend/BACKEND_RULES.md`](DevOps/Backend/BACKEND_RULES.md) | `backend/` 하위 Python |
+| Backend (FastAPI/Python) | [`DevOps/Backend/BACKEND_RULES.md`](DevOps/Backend/BACKEND_RULES.md) | `backend/` 하위 Python (레이어·API) |
+| Backend (엔티티·PK) | [`DevOps/Backend/ENTITY_RULE.md`](DevOps/Backend/ENTITY_RULE.md) | `backend/**/models/`, 마이그레이션 |
 
 ---
 

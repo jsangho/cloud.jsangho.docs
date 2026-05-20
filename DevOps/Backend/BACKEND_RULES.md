@@ -13,7 +13,7 @@
 | `controllers/` | HTTP 진입·요청/응답 조립, Service 호출 | `UserController` |
 | `services/` | 비즈니스 로직, 트랜잭션 단위 오케스트레이션 | `UserService` |
 | `repositories/` | DB 접근·쿼리 | `UserRepository` |
-| `models/` | SQLAlchemy ORM 모델 | `UserModel` |
+| `models/` | SQLAlchemy/SQLModel ORM 모델 (`id` PK 규칙은 [`ENTITY_RULE.md`](ENTITY_RULE.md)) | `UserModel` |
 | `schemas/` | Pydantic 요청/응답·검증 | `UserSchema` |
 
 - **Controller**에 DB 쿼리·비밀번호 해시 등 도메인 로직을 넣지 않는다.
@@ -64,5 +64,6 @@
 ```text
 backend/ 코드를 수정하기 전에 docs/DevOps/Backend/BACKEND_RULES.md 를 읽고,
 Controller → Service → Repository 레이어를 지켜 구현해 주세요.
+models/·테이블 추가 시 docs/DevOps/Backend/ENTITY_RULE.md (int PK id) 도 따릅니다.
 docs/README.md 인덱스도 확인하세요.
 ```
