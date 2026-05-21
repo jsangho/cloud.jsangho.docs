@@ -4,11 +4,11 @@
     "type": "split",
     "children": [
       {
-        "id": "0bc8e46b645b36af",
+        "id": "36dc668a02706062",
         "type": "tabs",
         "children": [
           {
-            "id": "27c59b7b4717f51e",
+            "id": "e34c15946985be17",
             "type": "leaf",
             "state": {
               "type": "empty",
@@ -179,8 +179,13 @@
       "bases:새 베이스 생성하기": false
     }
   },
-  "active": "e031bf14a1f94f9a",
+  "active": "e34c15946985be17",
   "lastOpenFiles": [
+    "DevOps/Backend/KAYFABE_ERD.md",
+    "DevOps/Backend/TITANIC_ERD.md",
+    "DevOps/Backend/BACKEND_RULES.md",
+    "DevOps/Backend/KAYFABE_END.md",
+    "DevOps/Frontend/REACT_RULES.md",
     "용어 정리.md",
     "260515.md",
     "환영합니다!.md",
