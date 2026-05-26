@@ -3,116 +3,143 @@
 WWE PLE(프리미엄 라이브 이벤트) 예측·결과를 Neon Postgres에 저장하는 Kayfabe 도메인 스키마입니다.  
 ORM: `backend/apps/kayfabe/app/models/ple_model.py` · 회원 FK: `secom` `users` 테이블.
 
+물리 PK·`id` 인조키 규칙은 [`ENTITY_RULE.md`](ENTITY_RULE.md)를 따릅니다. 본 문서의 **논리 ER**은 비즈니스 식별자·식별관계 기준이며, ORM은 조인 편의를 위해 모든 테이블에 `id`를 둡니다.
+
 ---
 
-## 한눈에 보기
+## PK · 인조키 정책
 
-데이터는 **이벤트 → 경기 → 예측** 순으로 이어집니다. 방송 **결과**는 `ple_matches`에 저장하고, 사용자 **예측**은 `ple_predictions`에 쌓입니다.
+| 테이블 | 논리 PK (비즈니스) | 물리 PK (ORM·Neon) | `id` 인조키 |
+|--------|-------------------|-------------------|-------------|
+| `ple_events` | `slug` | `id` + `slug` UK | **불필요** (논리). 물리는 ENTITY_RULE로 `id` 유지 |
+| `ple_matches` | `(event_id, match_key)` | `id` + UK `(event_id, match_key)` | **불필요** (논리). FK `event_id`가 부모 식별자 |
+| `ple_match_pick` (교차) | `(match_id, client_id)` | 물리 테이블 `ple_predictions` · `id` + UK | 경기·브라우저 참가를 연결. `user_id`는 PK 밖 FK |
+| `users` (Secom) | `id` | `id` | **필요** (외부 도메인) |
 
-```mermaid
-flowchart TB
-    subgraph Secom["Secom (회원)"]
-        users[("users")]
-    end
+- **논리:** 자식 행은 부모 없이 존재할 수 없으면 PK에 부모 FK(또는 slug)가 포함되는 **식별관계**로 모델링한다.
+- **물리:** [`ENTITY_RULE.md`](ENTITY_RULE.md)에 따라 **모든 테이블**에 `int id` autoincrement PK를 둔다. 비즈니스 중복 방지는 **UK**로 처리한다.
 
-    subgraph Kayfabe["Kayfabe (PLE)"]
-        direction TB
-        events[("ple_events<br/>PLE 이벤트")]
-        matches[("ple_matches<br/>경기 카드·결과")]
-        preds[("ple_predictions<br/>사용자 예측")]
-    end
+---
 
-    events -->|"1 : N"| matches
-    matches -->|"1 : N<br/>참가자마다 1행"| preds
-    users -.->|"0 : N<br/>선택 FK"| preds
+## 식별 · 비식별 관계
 
-    style events fill:#1e3a5f,stroke:#60a5fa,color:#e2e8f0
-    style matches fill:#3b2f4a,stroke:#c084fc,color:#e2e8f0
-    style preds fill:#1a3d2e,stroke:#4ade80,color:#e2e8f0
-    style users fill:#44403c,stroke:#a8a29e,color:#e2e8f0
+| 부모 | 자식 | 유형 | 설명 |
+|------|------|------|------|
+| `ple_events` | `ple_matches` | **식별** | 경기는 이벤트 없이 정의되지 않음. 논리 PK에 `event_id`(또는 `slug`) 포함 |
+| `ple_matches` | `ple_match_pick` | **식별** | 픽(예측)은 경기 없이 없음. 논리 PK `(match_id, client_id)` |
+| `users` | `ple_match_pick` | **비식별** | `user_id`는 PK에 **미포함**, NULL 허용. 픽 행은 브라우저(`client_id`)만으로 존재 가능 · 회원 삭제 시 SET NULL |
+
+| 부모 → 자식 | 유형 | Mermaid (중간) | 렌더 |
+|-------------|------|----------------|------|
+| `ple_events` → `ple_matches` | 식별 | `\|\|--\|{` | **실선** |
+| `ple_matches` → `ple_match_pick` | 식별 | `\|\|--\|{` | **실선** |
+| `users` → `ple_match_pick` | 비식별 | `}o..o{` | **점선** |
+
+```text
+식별:     자식.PK ⊃ 부모 FK(또는 slug)   CASCADE              Mermaid 중간: --
+비식별:   자식.FK only, PK 밖           users 삭제 → SET NULL   Mermaid 중간: ..
 ```
 
-| 단계 | 테이블 | 하는 일 |
-|------|--------|---------|
-| 1 | `ple_events` | Royal Rumble, WrestleMania 등 PLE 단위 |
-| 2 | `ple_matches` | 카드 JSON, 방송 승자(`winner_pick`) |
-| 3 | `ple_predictions` | 브라우저·회원별 승자 예측(`pick`) |
+> `}o..o{`는 M:N 전용이 아닙니다. Mermaid 예시(`PERSON }o..o{ NAMED-DRIVER`)처럼 **교차 엔티티로의 비식별 1:N**에도 점선을 씁니다.
 
 ---
 
-## ER 다이어그램 (관계 + 핵심 컬럼)
+## 교차 엔티티 (`ple_match_pick`)
 
-상세 컬럼은 아래 **테이블 · 필드 설명**을 보세요. 다이어그램에는 PK·FK·UK만 표기했습니다.
+`users`와 `ple_matches`는 **직접 M:N이 아닙니다.** 한 회원이 여러 경기에, 한 경기에 여러 참가자(브라우저·회원)가 예측할 수 있어 **논리적으로 M:N**처럼 보이지만, 이를 풀기 위한 **교차(연관) 엔티티**가 `ple_match_pick`입니다.
+
+| 구분 | 설명 |
+|------|------|
+| 논리 이름 | `ple_match_pick` — 「한 경기 + 한 참가(브라우저)」당 승자 예측 1건 |
+| 물리 테이블 | **`ple_predictions`** (별도 junction 테이블 없음, 1테이블이 교차 엔티티 역할) |
+| 경기 쪽 | `match_id` FK · UK `(match_id, client_id)` → 경기에 **식별** |
+| 회원 쪽 | `user_id` FK (선택) → 회원에 **비식별** · 로그인 후 `attach_user_id`로 연결 |
+| M:N 해소 | `ple_matches` **1:N** `ple_match_pick` **N:1** `users` (회원 미연결 행은 `user_id` NULL) |
+
+```text
+ple_matches ══1:N══► ple_match_pick ◄··0:N·· users
+              (실선·식별)   (교차)      (점선·비식별)
+              물리: ple_predictions
+```
+
+---
+
+## ER 다이어그램
+
+Neon·SQLAlchemy 실제 스키마(`ple_model.py`). 데이터는 **이벤트 → 경기 → 교차 엔티티(예측 픽)** 순으로 이어지며, 방송 **결과**는 `ple_matches.winner_pick`, 참가자 **예측**은 물리 테이블 `ple_predictions`(`ple_match_pick`)에 쌓입니다.
+
+> **Obsidian:** 라이브 프리뷰에서 Mermaid `erDiagram`이 렌더됩니다.
+
+**관계선 (Mermaid):** 가운데 `--` → **실선(식별)** · `..` → **점선(비식별)**. 양끝 `||--|{` / `}o..o{`는 카디널리티이며, 선 종류와는 별개입니다.
+
+| 논리 ER | 물리 테이블 | 논리 PK (UK) | 물리 PK |
+|---------|-------------|---------------|---------|
+| `ple_events` | `ple_events` | `slug` | `id` |
+| `ple_matches` | `ple_matches` | `(event_id, match_key)` | `id` |
+| **`ple_match_pick`** | **`ple_predictions`** | `(match_id, client_id)` | `id` |
+| `users` (Secom) | `users` | `id` | `id` |
 
 ```mermaid
 erDiagram
-    USERS ||--o{ PLE_PREDICTIONS : user_id
-    PLE_EVENTS ||--|{ PLE_MATCHES : event_id
-    PLE_MATCHES ||--o{ PLE_PREDICTIONS : match_id
+    ple_events ||--|{ ple_matches : identifies
+    ple_matches ||--|{ ple_match_pick : identifies
+    users }o..o{ ple_match_pick : optional_user
 
-    PLE_EVENTS {
+    ple_events {
         bigint id PK
-        varchar slug UK
-        varchar label
+        string slug UK
+        string label
         int month
         int year
-        varchar status
+        string status
+        datetime finished_at
     }
 
-    PLE_MATCHES {
+    ple_matches {
         bigint id PK
         bigint event_id FK
-        varchar match_key UK
-        varchar title
-        varchar format
-        varchar status
-        varchar winner_pick
-        varchar winner_name
+        string match_key
+        string title
+        string format
+        string status
+        string winner_pick
+        string ai_pick
+        int point_value
+        datetime finished_at
     }
 
-    PLE_PREDICTIONS {
+    ple_match_pick {
         bigint id PK
-        bigint match_id FK
-        varchar client_id UK
+        bigint match_id PK, FK
+        string client_id PK
         bigint user_id FK
-        varchar pick
+        string pick
+        datetime created_at
     }
 
-    USERS {
+    users {
         bigint id PK
-        varchar login_id UK
-        varchar nickname
-        varchar email UK
+        string login_id UK
+        string nickname
+        string email UK
     }
 ```
 
-> **UK 표기:** `ple_matches`의 `match_key`는 `(event_id, match_key)` 복합 유니크.  
-> `ple_predictions`의 `client_id`는 `(match_id, client_id)` 복합 유니크.
+관계 라벨: `identifies` = 식별(실선 `--`) · `optional_user` = 비식별(점선 `..`). `match_id`는 논리 PK·FK, `user_id`는 FK만(PK 아님).
+
+**UK:** `ple_matches` · `uq_ple_event_match_key` → `(event_id, match_key)` · `ple_predictions` · `uq_ple_prediction_match_client` → `(match_id, client_id)` · `uq_predictions_match_user` → `(match_id, user_id)` (`user_id` **NOT NULL**일 때 경기당 회원 1건)
 
 ---
 
-## 카디널리티 (자주 헷갈리는 부분)
+## 카디널리티
 
-```mermaid
-flowchart LR
-    M[한 경기<br/>ple_matches]
-    P1[예측 A]
-    P2[예측 B]
-    P3[예측 C]
-
-    M --> P1
-    M --> P2
-    M --> P3
-```
-
-| 관계 | ER 표기 | 의미 |
-|------|---------|------|
-| PLE_EVENTS → PLE_MATCHES | **1 : N** | 한 PLE에 여러 경기 카드 |
-| PLE_MATCHES → PLE_PREDICTIONS | **1 : N** | 한 경기에 **여러 사람**이 각자 예측 |
-| (경기 + client_id) → 예측 | **1 : 1** | 같은 사람은 같은 경기에 **한 번만** 예측 (`uq_ple_prediction_match_client`) |
-| USERS → PLE_PREDICTIONS | **0 : N** | 로그인 시 `user_id` 연결, 비로그인은 NULL |
-
-**1 : N인 이유:** 사이트 투표·순위를 위해 참가자마다 `ple_predictions` 행이 하나씩 필요합니다. 경기당 예측이 전체 1건(1 : 1)이면 한 명만 예측하는 구조가 됩니다.
+| 관계 | ER 표기 | 유형 | Mermaid | 의미 |
+|------|---------|------|---------|------|
+| `ple_events` → `ple_matches` | **1 : N** | 식별 | `\|\|--\|{` 실선 | 한 PLE에 여러 경기 · 논리 PK에 `event_id` |
+| `ple_matches` → `ple_match_pick` | **1 : N** | 식별 | `\|\|--\|{` 실선 | 한 경기에 여러 참가(브라우저) 픽 · 논리 PK `(match_id, client_id)` |
+| (경기 + `client_id`) → 픽 | **1 : 1** | — | — | 브라우저당 경기 1회 (`uq_ple_prediction_match_client`) |
+| (경기 + `user_id`) | **1 : 1** | — | — | 로그인·`user_id` NOT NULL 시 경기당 1회 (`uq_predictions_match_user`) |
+| `users` → `ple_match_pick` | **0 : N** | 비식별 | `}o..o{` 점선 | 회원당 여러 픽 · `user_id` NULL 픽은 회원 엔티티와 무관 |
 
 ---
 
@@ -120,10 +147,12 @@ flowchart LR
 
 | 이름 | 테이블 | 규칙 |
 |------|--------|------|
-| `uq_ple_event_match_key` | `ple_matches` | 같은 이벤트 안에서 `match_key` 중복 불가 |
-| `uq_ple_prediction_match_client` | `ple_predictions` | 같은 경기·같은 `client_id` 중복 불가 |
+| `uq_ple_event_match_key` | `ple_matches` | `(event_id, match_key)` 유일 |
+| `uq_ple_prediction_match_client` | `ple_predictions` | `(match_id, client_id)` 유일 |
+| `uq_predictions_match_user` | `ple_predictions` | `(match_id, user_id)` 유일 (`user_id` NOT NULL인 행만 적용) |
 | FK CASCADE | `ple_matches` → `ple_events` | 이벤트 삭제 시 경기·예측 연쇄 삭제 |
 | FK CASCADE | `ple_predictions` → `ple_matches` | 경기 삭제 시 예측 연쇄 삭제 |
+| FK SET NULL | `ple_predictions.user_id` → `users` | 회원 삭제 시 `user_id`만 NULL |
 
 ---
 
@@ -131,51 +160,62 @@ flowchart LR
 
 ### `ple_events` (`PleEventModel`)
 
-| 필드 | 타입 | 설명 |
-|------|------|------|
-| id | bigint PK | 내부 ID |
-| slug | varchar(64) UK | URL·프론트 식별자 (예: `wrestlemania`, `royal-rumble`) |
-| label | varchar(120) | 표시 이름 (예: WrestleMania) |
-| month | int | 월 (1~11, WWE PLE 월별 순서) |
-| year | int | 연도 (기본 2026) |
-| status | varchar(20) | `upcoming` · `live` · `finished` |
-| finished_at | timestamptz | 이벤트 종료 시각 |
-| created_at | timestamptz | 생성 시각 |
-| updated_at | timestamptz | 갱신 시각 |
+| 필드 | 타입 | 키 | 설명 |
+|------|------|-----|------|
+| id | bigint | PK (물리) | ENTITY_RULE 인조키 |
+| slug | varchar(64) | UK · **논리 PK** | URL·프론트 식별자 |
+| label | varchar(120) | | 표시 이름 |
+| month | int | | PLE 월별 순서 |
+| year | int | | 연도 |
+| status | varchar(20) | | `upcoming` · `live` · `finished` |
+| finished_at | timestamptz | | 이벤트 종료 시각 |
+| created_at | timestamptz | | 생성 |
+| updated_at | timestamptz | | 갱신 |
 
 ### `ple_matches` (`PleMatchModel`)
 
-| 필드 | 타입 | 설명 |
-|------|------|------|
-| id | bigint PK | 내부 ID |
-| event_id | bigint FK | `ple_events.id` |
-| match_key | varchar(80) | 프론트 카드 `id` (예: `wm42-n1-undisputed`). 이벤트 내 유일 |
-| title | varchar(200) | 경기 제목 |
-| format | varchar(20) | `singles` · `multi` |
-| card_variant | varchar(10) | 카드 UI 변형 (`sideA`, `sideB`) |
-| sort_order | int | 카드 목록 정렬 |
-| card_json | text | 선수·배당 JSON (`left`/`right`/`competitors`, `bookmakerDecimal` 등) |
-| status | varchar(20) | `scheduled` · `live` · `finished` |
-| winner_pick | varchar(20) | 방송 결과: `left`/`right` 또는 multi 승자 인덱스 문자열 |
-| winner_name | varchar(200) | 승자 표시명 |
-| finished_at | timestamptz | 경기 결과 확정 시각 |
-| created_at | timestamptz | 생성 시각 |
-| updated_at | timestamptz | 갱신 시각 |
+| 필드 | 타입 | 키 | 설명 |
+|------|------|-----|------|
+| id | bigint | PK (물리) | ENTITY_RULE 인조키 |
+| event_id | bigint | FK · **논리 PK 일부** | `ple_events.id` |
+| match_key | varchar(80) | **논리 PK 일부** | 프론트 카드 `id` |
+| title | varchar(200) | | 경기 제목 |
+| format | varchar(20) | | `singles` · `multi` |
+| card_variant | varchar(10) | | `sideA` · `sideB` |
+| sort_order | int | | 카드 정렬 |
+| card_json | text | | 선수·배당 JSON |
+| status | varchar(20) | | `scheduled` · `live` · `finished` |
+| winner_pick | varchar(20) | | 방송 결과 |
+| winner_name | varchar(200) | | 승자 표시명 |
+| ai_pick | varchar(20) | | AI 예측 |
+| ai_pick_name | varchar(200) | | AI 예측 표시명 |
+| ai_correct | boolean | | AI 정답 여부 |
+| point_value | int | | 순위 가중치 |
+| finished_at | timestamptz | | 결과 확정 시각 |
+| created_at | timestamptz | | 생성 |
+| updated_at | timestamptz | | 갱신 |
 
-### `ple_predictions` (`PlePredictionModel`)
+### `ple_match_pick` · 물리 `ple_predictions` (`PlePredictionModel`)
 
-| 필드 | 타입 | 설명 |
-|------|------|------|
-| id | bigint PK | 내부 ID |
-| match_id | bigint FK | `ple_matches.id` |
-| client_id | varchar(64) | 브라우저 익명 ID (프론트 `ple-client-id`) |
-| user_id | bigint FK NULL | `users.id` (선택, 로그인 연동 예정) |
-| pick | varchar(20) | 예측: `left` · `right` · multi면 `"0"`,`"1"`… |
-| created_at | timestamptz | 예측 시각 |
+논리 **교차 엔티티**. ORM·Neon 테이블명은 `ple_predictions`입니다.
 
-### `users` (Secom, 참조만)
+| 필드 | 타입 | 키 | 설명 |
+|------|------|-----|------|
+| id | bigint | PK (물리) | ENTITY_RULE 인조키 |
+| match_id | bigint | FK · **논리 PK 일부** | `ple_matches.id` |
+| client_id | varchar(64) | **논리 PK 일부** | 브라우저(비로그인 참가) 식별 |
+| user_id | bigint | FK (비식별) | `users.id`, NULL 허용 · 로그인 연동 |
+| pick | varchar(20) | | `left` · `right` · `"0"`… |
+| created_at | timestamptz | | 예측 시각 |
 
-Kayfabe 예측의 선택적 FK. 정의는 `secom.app.models.user_model`.
+### `users` (Secom, 참조)
+
+| 필드 | 타입 | 키 | 설명 |
+|------|------|-----|------|
+| id | bigint | PK | 외부 도메인 인조키 |
+| login_id | varchar | UK | 로그인 ID |
+| nickname | varchar | | 닉네임 |
+| email | varchar | UK | 이메일 |
 
 ---
 
@@ -183,20 +223,17 @@ Kayfabe 예측의 선택적 FK. 정의는 `secom.app.models.user_model`.
 
 | 구분 | 값 | 용도 |
 |------|-----|------|
-| 이벤트 status | upcoming, live, finished | PLE 전체 진행 |
+| 이벤트 status | upcoming, live, finished | PLE 전체 |
 | 경기 status | scheduled, live, finished | 개별 매치 |
-| pick (예측) | left, right, 0..n | singles / multi |
-| winner_pick (결과) | left, right, 0..n | 방송 승자 |
+| pick / winner_pick | left, right, 0..n | singles / multi |
 
 ---
 
 ## `card_json` 구조 (요약)
 
-프론트 `wwe-ple-matches.ts`와 동기화된 스냅샷입니다.
-
 | format | 주요 키 |
 |--------|---------|
-| singles | `left`, `right` (`name`, `isChampion`), `bookmakerDecimal` |
+| singles | `left`, `right`, `bookmakerDecimal` |
 | multi | `competitors[]`, `bookmakerDecimal` |
 
 ---
@@ -205,11 +242,11 @@ Kayfabe 예측의 선택적 FK. 정의는 `secom.app.models.user_model`.
 
 | 레이어 | 경로 | 역할 |
 |--------|------|------|
-| Controller | `app/controllers/ple_controller.py` | API 진입, 로깅 |
-| Service | `app/services/ple_service.py` | 동기화·보드·예측·결과 비즈니스 로직 |
-| Repository | `app/repositories/ple_repository.py` | Neon CRUD·투표 집계 |
-| Model | `app/models/ple_model.py` | SQLAlchemy ORM |
-| Schema | `app/schemas/ple_schema.py` | Pydantic 요청·응답 DTO |
+| Controller | `app/controllers/ple_controller.py` | API 진입 |
+| Service | `app/services/ple_service.py` | 동기화·보드·예측 |
+| Repository | `app/repositories/ple_repository.py` | Neon CRUD |
+| Model | `app/models/ple_model.py` | ORM |
+| Schema | `app/schemas/ple_schema.py` | DTO |
 
 흐름: **Controller → Service → Repository → Neon**
 
@@ -219,12 +256,12 @@ Kayfabe 예측의 선택적 FK. 정의는 `secom.app.models.user_model`.
 
 | 메서드 | 경로 | DB 영향 |
 |--------|------|---------|
-| GET | `/ple/events` | `ple_events` 목록 |
-| GET | `/ple/{slug}` | 이벤트 + 경기 + 예측·투표 집계 |
-| POST | `/ple/{slug}/sync-from-client` | `ple_events`·`ple_matches` upsert |
-| POST | `/ple/{slug}/matches/{match_key}/predict` | `ple_predictions` INSERT |
-| POST | `/ple/{slug}/matches/{match_key}/result` | `ple_matches` 승자·status 갱신 |
-| GET | `/ple/{slug}/live` | SSE 보드 스냅샷 (읽기) |
+| GET | `/ple/events` | `ple_events` |
+| GET | `/ple/{slug}` | events + matches + predictions |
+| POST | `/ple/{slug}/sync-from-client` | events·matches upsert |
+| POST | `/ple/{slug}/matches/{match_key}/predict` | `ple_predictions` |
+| POST | `/ple/{slug}/matches/{match_key}/result` | `ple_matches` 결과 |
+| GET | `/ple/{slug}/live` | SSE 스냅샷 |
 
 ---
 
@@ -235,4 +272,12 @@ Kayfabe 예측의 선택적 FK. 정의는 `secom.app.models.user_model`.
 | PLE 목록·예측 | `/ple`, `/ple/[slug]` | sync, predict, live |
 | 결과 등록 | `/results`, `/results/[slug]` | sync, result |
 
-테이블 생성: `database.init_db()`에서 `kayfabe.app.models.ple_model` import 후 `create_all`.
+---
+
+## 3NF · ER 체크리스트
+
+- [ ] 논리 PK: `slug` · `(event_id, match_key)` · `(match_id, client_id)` — 교차 엔티티 `ple_match_pick`
+- [ ] 물리: 모든 테이블 `id` PK · 교차 엔티티 = `ple_predictions` ([`ENTITY_RULE.md`](ENTITY_RULE.md))
+- [ ] `ple_events` → `ple_matches` → `ple_match_pick` **식별관계**
+- [ ] `users` → `ple_match_pick` **1:N 비식별** (M:N 아님 · `user_id` FK만)
+- [ ] UK: `uq_ple_event_match_key`, `uq_ple_prediction_match_client`, `uq_predictions_match_user`
