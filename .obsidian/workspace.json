@@ -4,11 +4,11 @@
     "type": "split",
     "children": [
       {
-        "id": "e8b51145358d19cc",
+        "id": "6e75530b085dd74f",
         "type": "tabs",
         "children": [
           {
-            "id": "53796c895b9d74d6",
+            "id": "33a0e9be17da1b7b",
             "type": "leaf",
             "state": {
               "type": "markdown",
@@ -183,10 +183,15 @@
       "bases:새 베이스 생성하기": false
     }
   },
-  "active": "53796c895b9d74d6",
+  "active": "33a0e9be17da1b7b",
   "lastOpenFiles": [
-    "DevOps/Backend/KAYFABE_ERD-erDiagram.md",
+    "DevOps/Backend/_t.svg",
+    "DevOps/Backend/_t.mmd",
     "DevOps/Backend/KAYFABE_ERD.md",
+    "DevOps/Backend/_obs-test.svg",
+    "DevOps/Backend/_obs-test.mmd",
+    "KAYFABE_ERD-erDiagram.md",
+    "DevOps/Backend/KAYFABE_ERD-erDiagram.md",
     "DevOps/Backend/_kayfabe-test.svg",
     "DevOps/Backend/_kayfabe-test.mmd",
     "DevOps/Backend/KAYFABE_ERD-test.svg",
