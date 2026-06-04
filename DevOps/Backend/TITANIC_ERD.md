@@ -72,7 +72,7 @@ erDiagram
 | EMBARKED_PORTS | port_name | Cherbourg, Queenstown, Southampton |ERD
 
 Kaggle 타이타닉 명단 · **이진 분류** (6개 독립변수 → `Survived` 0/1).  
-ORM: `backend/apps/titanic/app/models/passenger_model.py` → Neon **`titanic_passengers`** (단일 테이블, 아래 개념 ER은 CSV·분석용).
+ORM: `backend/apps/titanic/adapter/outbound/orm/person_orm.py`, `booking_orm.py` → Neon **`titanic_persons`**, **`titanic_bookings`** (아래 개념 ER은 CSV·분석용).
 
 ```mermaid
 erDiagram
