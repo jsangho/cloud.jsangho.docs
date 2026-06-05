@@ -3,7 +3,9 @@
 Mermaid `erDiagram`은 속성·관계 라벨의 **따옴표·괄호·슬래시** 등에서 파싱 오류가 납니다. 필드 설명은 아래 표를 참고하세요.
 
 WWE PLE(프리미엄 라이브 이벤트) 예측·결과를 Neon Postgres에 저장하는 Kayfabe 도메인 스키마입니다.  
-ORM: `backend/apps/kayfabe/app/models/ple_model.py` · 회원 FK: `secom` `users` 테이블.
+ORM: `backend/apps/kayfabe/adapter/outbound/orm/ple_orm.py` · 회원 FK: Neon `users` 테이블 (`friday13th.domain.entities.user_model.UserModel` 참조 · `oracle_database.init_db`에서 secom/friday13th 모델 로드).
+
+**선수 기록(Records)** 은 별도 테이블 없이 `ple_matches.card_json`(출전 선수)과 `ple_matches` 결과 필드(`winner_pick`, `winner_name`)를 조합해 **읽기 전용 집계**로 제공합니다.
 
 물리 PK·`id` 인조키 규칙은 [`ENTITY_RULE.md`](ENTITY_RULE.md)를 따릅니다.
 
@@ -14,7 +16,7 @@ erDiagram
     USERS ||..o{ PLE_MATCH_PICK : user_id
 
     PLE_EVENTS {
-        bigint id PK
+        int id PK
         varchar slug UK
         varchar label
         int month
@@ -23,8 +25,8 @@ erDiagram
     }
 
     PLE_MATCHES {
-        bigint id PK
-        bigint event_id FK
+        int id PK
+        int event_id FK
         varchar match_key
         varchar title
         varchar format
@@ -34,15 +36,15 @@ erDiagram
     }
 
     PLE_MATCH_PICK {
-        bigint id PK
-        bigint match_id FK
+        int id PK
+        int match_id FK
         varchar client_id
-        bigint user_id FK
+        int user_id FK
         varchar pick
     }
 
     USERS {
-        bigint id PK
+        int id PK
         varchar login_id UK
         varchar nickname
         varchar email UK
@@ -71,7 +73,7 @@ erDiagram
 | `ple_events` | `slug` | `id` + `slug` UK | **불필요** (논리). 물리는 ENTITY_RULE로 `id` 유지 |
 | `ple_matches` | `(event_id, match_key)` | `id` + UK `(event_id, match_key)` | **불필요** (논리). FK `event_id`가 부모 식별자 |
 | `ple_match_pick` (교차) | `(match_id, client_id)` | 물리 테이블 `ple_predictions` · `id` + UK | 경기·브라우저 참가를 연결. `user_id`는 PK 밖 FK |
-| `users` (Secom) | `id` | `id` | **필요** (외부 도메인) |
+| `users` (외부) | `id` | `id` | **필요** (secom/friday13th 공유 Neon 테이블) |
 
 - **논리:** 자식 행은 부모 없이 존재할 수 없으면 PK에 부모 FK(또는 slug)가 포함되는 **식별관계**로 모델링한다.
 - **물리:** [`ENTITY_RULE.md`](ENTITY_RULE.md)에 따라 **모든 테이블**에 `int id` autoincrement PK를 둔다. 비즈니스 중복 방지는 **UK**로 처리한다.
@@ -126,7 +128,7 @@ ple_events ══1:N══► ple_matches ══1:N══► ple_match_pick ··
 |----------------|-----|------|
 | 논리 UK (브라우저) | `(match_id, client_id)` | 기기·세션 단위 중복 방지 |
 | 논리 UK (회원) | `(match_id, user_id)` | 로그인 회원 경기당 1픽 · **upsert·`myPick` 조회** |
-| API | `userId` + `clientId` | 예측 POST 시 `userId` **필수** (401) |
+| API | `userId` + `clientId` | 예측 POST 시 `userId` **필수** (미제공 → **422** · 무효 id → **401**) |
 
 ---
 
@@ -153,7 +155,7 @@ flowchart LR
 | `ple_events` | `ple_events` | `slug` | `id` |
 | `ple_matches` | `ple_matches` | `(event_id, match_key)` | `id` |
 | **`ple_match_pick`** | **`ple_predictions`** | `(match_id, client_id)` | `id` |
-| `users` (Secom) | `users` | `id` | `id` |
+| `users` (외부) | `users` | `id` | `id` |
 
 **선·관계 읽는 법**
 
@@ -163,7 +165,7 @@ flowchart LR
 | `ple_matches` → `ple_match_pick` | `\|\|--o{` + `--` | 1:0..N **식별** |
 | `users` → `ple_match_pick` | `\|\|..o{` + `..` | 1:0..N **비식별** |
 
-**애플리케이션:** `POST …/predict` · `…/predictions/batch` → body `userId` **필수** · upsert·`myPick` → `(match_id, user_id)`.
+**애플리케이션:** `POST …/predict` · `…/predictions/batch` → body `userId` **필수** (미제공 422 · 무효 id 401) · upsert → `(match_id, user_id)` · `myPick` → `user_id` 우선, 없으면 `client_id`.
 
 **UK:** `uq_ple_event_match_key` · `uq_ple_prediction_match_client` · `uq_predictions_match_user`
 
@@ -188,11 +190,11 @@ flowchart LR
 |------|--------|------|
 | `uq_ple_event_match_key` | `ple_matches` | `(event_id, match_key)` 유일 |
 | `uq_ple_prediction_match_client` | `ple_predictions` | `(match_id, client_id)` 유일 |
-| `uq_predictions_match_user` | `ple_predictions` | `(match_id, user_id)` 유일 (`user_id` NOT NULL인 행만 적용) |
+| `uq_predictions_match_user` | `ple_predictions` | `(match_id, user_id)` UK (ORM `UniqueConstraint` · Postgres는 `user_id IS NULL` 행은 UK 미적용) |
 | FK CASCADE | `ple_matches` → `ple_events` | 이벤트 삭제 시 경기·예측 연쇄 삭제 |
 | FK CASCADE | `ple_predictions` → `ple_matches` | 경기 삭제 시 예측 연쇄 삭제 |
 | FK SET NULL | `ple_predictions.user_id` → `users` | 회원 삭제 시 `user_id`만 NULL |
-| API | predict · predict batch | body `userId` 필수 · 미제공·무효 id → **401** |
+| API | predict · predict batch | body `userId` 필수 · 미제공 → **422** (Pydantic) · DB에 없는 id → **401** (`PleAuthRequiredError`) |
 
 ---
 
@@ -206,10 +208,10 @@ sequenceDiagram
     participant P as ple_match_pick
 
     U->>F: 로그인 (localStorage)
-    F->>API: GET /ple/slug?user_id=
-    API->>P: user_id로 myPick 조회
-    F->>API: POST /ple/slug/predictions/batch
-    API->>API: users.id 검증
+    F->>API: GET /ple/{slug}?user_id= (또는 client_id=)
+    API->>P: user_id 우선 myPick 조회 (없으면 client_id)
+    F->>API: POST /ple/{slug}/predictions/batch
+    API->>API: users.id 검증 (없으면 401)
     API->>P: upsert (match_id, user_id)
 ```
 
@@ -221,7 +223,7 @@ sequenceDiagram
 
 | 필드 | 타입 | 키 | 설명 |
 |------|------|-----|------|
-| id | bigint | PK (물리) | ENTITY_RULE 인조키 |
+| id | int | PK (물리) | ENTITY_RULE 인조키 |
 | slug | varchar(64) | UK · **논리 PK** | URL·프론트 식별자 |
 | label | varchar(120) | | 표시 이름 |
 | month | int | | PLE 월별 순서 |
@@ -235,8 +237,8 @@ sequenceDiagram
 
 | 필드 | 타입 | 키 | 설명 |
 |------|------|-----|------|
-| id | bigint | PK (물리) | ENTITY_RULE 인조키 |
-| event_id | bigint | FK · **논리 PK 일부** | `ple_events.id` |
+| id | int | PK (물리) | ENTITY_RULE 인조키 |
+| event_id | int | FK · **논리 PK 일부** | `ple_events.id` |
 | match_key | varchar(80) | **논리 PK 일부** | 프론트 카드 `id` |
 | title | varchar(200) | | 경기 제목 |
 | format | varchar(20) | | `singles` · `multi` |
@@ -260,18 +262,20 @@ sequenceDiagram
 
 | 필드 | 타입 | 키 | 설명 |
 |------|------|-----|------|
-| id | bigint | PK (물리) | ENTITY_RULE 인조키 |
-| match_id | bigint | FK · **논리 PK 일부** | `ple_matches.id` |
+| id | int | PK (물리) | ENTITY_RULE 인조키 |
+| match_id | int | FK · **논리 PK 일부** | `ple_matches.id` |
 | client_id | varchar(64) | **논리 PK 일부** · UK | 기기 식별 · API와 함께 전송 |
-| user_id | bigint | FK (비식별) · UK `(match_id, user_id)` | `users.id` · **신규 예측 API 필수** · DB nullable(레거시) |
+| user_id | int | FK (비식별) · UK `(match_id, user_id)` | `users.id` · **신규 예측 API 필수** · DB nullable(레거시) |
 | pick | varchar(20) | | `left` · `right` · `"0"`… |
 | created_at | timestamptz | | 예측 시각 |
 
-### `users` (Secom, 참조)
+### `users` (외부 도메인, 참조)
+
+Kayfabe 코드는 `friday13th.domain.entities.user_model.UserModel`을 import합니다. Neon `users` 테이블은 secom·friday13th가 공유합니다.
 
 | 필드 | 타입 | 키 | 설명 |
 |------|------|-----|------|
-| id | bigint | PK | 외부 도메인 인조키 |
+| id | int | PK | 외부 도메인 인조키 |
 | login_id | varchar | UK | 로그인 ID |
 | nickname | varchar | | 닉네임 |
 | email | varchar | UK | 이메일 |
@@ -290,40 +294,177 @@ sequenceDiagram
 
 ## `card_json` 구조 (요약)
 
-| format | 주요 키 |
-|--------|---------|
-| singles | `left`, `right`, `bookmakerDecimal` |
-| multi | `competitors[]`, `bookmakerDecimal` |
+| format | 주요 키 | Records 활용 |
+|--------|---------|--------------|
+| singles | `left`, `right`, `bookmakerDecimal` | `left.name` / `right.name` · `isChampion` → `wasChampion` |
+| multi | `competitors[]`, `bookmakerDecimal` | `competitors[].name` · 럼블 `다른 선수` 제외 |
+
+---
+
+## 선수 기록 (Records) — 논리 모델
+
+물리 테이블은 **추가하지 않습니다.** Neon에 동기화된 PLE 카드·경기 결과를 읽어 API로 집계합니다.
+
+> 참고: 아래 ER(물리) 다이어그램(테이블/FK)에는 `records`가 나오지 않습니다.  
+> `records`는 **테이블이 아니라 파생 집계(view-like)** 이기 때문입니다.
+
+```mermaid
+flowchart LR
+    subgraph Neon
+        E[ple_events]
+        M[ple_matches]
+    end
+    subgraph Records API
+        L[list_competitors]
+        P[get_competitor_profile]
+    end
+  E --> M
+  M -->|card_json| L
+  M -->|winner_pick / winner_name| P
+  L --> P
+```
+
+| 구분 | 설명 |
+|------|------|
+| 논리 엔티티 | **competitor** — `card_json`에 등장하는 선수·팀명 (별도 `competitors` 테이블 없음) |
+| 목록 출처 | `ple_matches.card_json` 전 행 파싱 · `다른 선수`(럼블 기타) 제외 |
+| 프로필 출처 | `PleInfoUseCase.get_board()` — 이벤트별 `MatchBoardSchema` |
+| 승패 판정 | `app/services/records_scoring.py` — `win` · `loss` · `no-contest` · `pending` |
+| 승률 | `wins / (wins + losses)` (무효·대기 제외) |
+
+### 파생 ER (논리) — Records View
+
+아래는 “DB 테이블”이 아니라, `records` API가 반환하는 **파생 엔티티(뷰)** 를 논리적으로 그린 것입니다.
+
+```mermaid
+erDiagram
+    PLE_MATCHES ||..o{ RECORDS_MATCH : derived_from_card_and_result
+    RECORDS_COMPETITOR ||--o{ RECORDS_MATCH : has_matches
+
+    RECORDS_COMPETITOR {
+        string name PK  "card_json에서 추출 (테이블 없음)"
+    }
+
+    RECORDS_MATCH {
+        string competitor_name FK "RECORDS_COMPETITOR.name"
+        string event_slug "ple_events.slug"
+        string ple_label
+        string match_key "ple_matches.match_key"
+        string title
+        string format
+        string result "win|loss|no-contest|pending"
+    }
+```
+
+### 경기 결과 판정 규칙
+
+| `result` | 조건 |
+|----------|------|
+| `pending` | `MatchBoardSchema.result` 없음 (결과 미확정) |
+| `no-contest` | 결과는 있으나 승자 이름 추론 불가 |
+| `win` | 추론된 `winnerName` == 선수명 (정규화 후 비교) |
+| `loss` | 경기 참가했으나 승자가 아님 |
+
+승자 추론 순서: `result.winnerName` → multi면 `winnerIndex` → singles면 `winnerSide`(`left`/`right`).
+
+### API 응답 스키마 (`records_schema.py`)
+
+| 스키마 | 필드 (camelCase) | 설명 |
+|--------|------------------|------|
+| `CompetitorListResponseSchema` | `names` | 출전 선수명 목록 |
+| `CompetitorProfileResponseSchema` | `name`, `matches`, `summary` | 선수 프로필 |
+| `CompetitorSummarySchema` | `total`, `wins`, `losses`, `noContest`, `pending`, `singlesTotal`, `multiTotal`, `championAppearances` | 요약 통계 |
+| `CompetitorMatchRecordSchema` | `slug`, `pleLabel`, `matchKey`, `title`, `format`, `result`, `winnerName`, `opponents`, `participants`, `wasChampion` | 경기별 기록 |
 
 ---
 
 ## 레이어드 구조 (`backend/apps/kayfabe`)
 
+titanic 앱과 동일한 헥사고날(포트·어댑터) 구조입니다.
+
 | 레이어 | 경로 | 역할 |
 |--------|------|------|
-| Controller | `app/controllers/ple_controller.py` | API 진입 |
-| Service | `app/services/ple_service.py` | 동기화·보드·예측 |
-| Repository | `app/repositories/ple_repository.py` | Neon CRUD |
-| Model | `app/models/ple_model.py` | ORM |
-| Schema | `app/schemas/ple_schema.py` | DTO |
+| Router | `adapter/inbound/api/v1/*_router.py` | HTTP 진입 · 스키마 검증 |
+| Schema | `adapter/inbound/api/schemas/` | Pydantic 요청·응답 DTO (`ple`, `ranking`, `result`, **`records`**) |
+| Router 집계 | `adapter/inbound/api/__init__.py` | `kayfabe_router` (5개 v1 라우터) |
+| DIP | `dependencies/*.py` | UseCase 조립 (팩토리) |
+| Input port | `app/ports/input/*_use_case.py` | 유스케이스 인터페이스 |
+| Interactor | `app/use_cases/*_interactor.py` | 비즈니스 로직 |
+| Output port | `app/ports/output/*_repository.py` | 저장소 인터페이스 |
+| PG adapter | `adapter/outbound/pg/*_pg_repository.py` | Neon CRUD·조회 |
+| ORM | `adapter/outbound/orm/ple_orm.py` | SQLAlchemy 모델 |
+| Domain service | `app/services/` | `ple_ai`, `ple_scoring`, **`records_scoring`** |
+| DTO | `app/dtos/ranking_dto.py` | 랭킹 집계 행 (`LeaderboardRow`) |
 
-흐름: **Controller → Service → Repository → Neon**
+### 기능별 파일 매핑
+
+| 기능 | Router | dependencies | Input port | Interactor | Output port | PG adapter | Schema |
+|------|--------|--------------|------------|------------|-------------|------------|--------|
+| PLE 쓰기 | `ple_router` | `ple.py` | `ple_use_case` | `ple_interactor` | `ple_repository` | `ple_pg_repository` | `ple_schema` |
+| PLE 조회 | `pleinfo_router` | `pleinfo.py` | `pleinfo_use_case` | `pleinfo_interactor` | `pleinfo_repository` | `pleinfo_pg_repository` | `ple_schema` |
+| 순위 | `ranking_router` | `ranking.py` | `ranking_use_case` | `ranking_interactor` | `ranking_repository`, `ple_repository` | `ranking_pg_repository` | `ranking_schema` |
+| 결과 목록 | `result_router` | `result.py` | `result_use_case` | `result_interactor` | `result_repository` | `result_pg_repository` | `result_schema` |
+| **선수 기록** | **`records_router`** | **`records.py`** | **`records_use_case`** | **`records_interactor`** | **`records_repository`**, `pleinfo_use_case` | **`records_pg_repository`** | **`records_schema`** |
+
+흐름 (쓰기): **Router → dependencies → Interactor → PgRepository → Neon**  
+흐름 (기록): **records_router → RecordsInteractor → RecordsPgRepository + PleInfoInteractor(get_board)**
+
+`main.py` 등록: `app.include_router(kayfabe_router)` 한 줄.
+
+`RecordsInteractor`는 `PleInfoUseCase`에만 의존하고, `PleInfoPgRepository`를 직접 import하지 않습니다 (`dependencies/records.py`에서 조립).
 
 ---
 
-## HTTP API (`main.py`)
+## HTTP API
 
-| 메서드 | 경로 | DB 영향 |
-|--------|------|---------|
-| GET | `/ple/events` | `ple_events` |
-| GET | `/ple/{slug}` | events + matches · `?user_id=` 시 회원 `myPick` |
-| POST | `/ple/{slug}/sync-from-client` | events·matches upsert |
-| POST | `/ple/{slug}/predictions/batch` | `ple_predictions` · **`userId` 필수** |
-| POST | `/ple/{slug}/matches/{match_key}/predict` | `ple_predictions` · **`userId` 필수** |
-| POST | `/ple/{slug}/matches/{match_key}/result` | `ple_matches` 결과 |
-| GET | `/ple/{slug}/live` | SSE · `user_id` 쿼리 optional |
-| POST | `/ple/link-predictions` | **410** (폐기) |
-| GET | `/rankings` | `user_id` NOT NULL 픽만 집계 |
+라우터: `kayfabe_router` (`adapter/inbound/api/__init__.py`) · `main.py`에서 단일 등록.
+
+| 메서드 | 경로 | 라우터 | DB 영향 |
+|--------|------|--------|---------|
+| GET | `/ple/events` | `pleinfo_router` | `ple_events` 목록 |
+| GET | `/ple/ai-stats` | `pleinfo_router` | AI 예측 누적 통계 |
+| GET | `/ple/{slug}` | `pleinfo_router` | events + matches · `?user_id=` 또는 `?client_id=` 시 `myPick` |
+| GET | `/ple/{slug}/live` | `pleinfo_router` | SSE · **`client_id` 필수** · `user_id` optional |
+| POST | `/ple/{slug}/sync-from-client` | `ple_router` | events·matches upsert |
+| POST | `/ple/{slug}/predictions/batch` | `ple_router` | `ple_predictions` · body `userId` 필수 |
+| POST | `/ple/{slug}/matches/{match_key}/predict` | `ple_router` | `ple_predictions` · body `userId` 필수 |
+| POST | `/ple/{slug}/results/batch` | `ple_router` | `ple_matches` 결과 일괄 |
+| POST | `/ple/{slug}/matches/{match_key}/result` | `ple_router` | `ple_matches` 결과 1건 |
+| POST | `/ple/link-predictions` | `ple_router` | **410** (폐기) |
+| GET | `/rankings` | `ranking_router` | `user_id` NOT NULL 픽만 집계 · `?nickname=` |
+| GET | `/ple/results/results` | `result_router` | 연도별 PLE 이벤트 결과 · `?year=` (기본 2026) |
+| GET | `/records/competitors` | `records_router` | `card_json` 기준 출전 선수 목록 · `?q=` 검색 |
+| GET | `/records/competitors/{name}` | `records_router` | 선수별 PLE 승패 기록 · 목록에 없는 선수 **404** · 경기 0건이어도 목록에 있으면 **200** |
+
+> **선수 목록이 비어 있으면** PLE 카드가 아직 `POST /ple/{slug}/sync-from-client`로 Neon에 동기화되지 않은 상태일 수 있습니다.
+
+---
+
+## 선수 기록 흐름
+
+```mermaid
+sequenceDiagram
+    participant F as Frontend
+    participant R as records_router
+    participant I as RecordsInteractor
+    participant RP as RecordsPgRepository
+    participant PI as PleInfoInteractor
+    participant N as Neon
+
+    F->>R: GET /records/competitors?q=
+    R->>I: list_competitors
+    I->>RP: list_competitor_names
+    RP->>N: SELECT ple_matches.card_json
+    RP-->>I: names[]
+    I-->>F: CompetitorListResponse
+
+    F->>R: GET /records/competitors/{name}
+    R->>I: get_competitor_profile
+    I->>PI: list_events + get_board(slug)
+    PI->>N: ple_events + ple_matches
+    I->>I: records_scoring (win/loss)
+    I-->>F: CompetitorProfileResponse
+```
 
 ---
 
@@ -332,7 +473,10 @@ sequenceDiagram
 | 화면 | 경로 | API |
 |------|------|-----|
 | PLE 목록·예측 | `/ple`, `/ple/[slug]` | sync, predict(batch), live · **로그인 후 예측** |
-| 결과 등록 | `/results`, `/results/[slug]` | sync, result |
+| 결과 등록 | `/results`, `/results/[slug]` | sync, result(batch·단건), `GET /ple/results/results` |
+| **선수 기록** | **`/records`, `/records/[name]`** | **`GET /records/competitors`**, **`GET /records/competitors/{name}`** · `frontend/lib/records-api.ts` |
+| 순위표 | `/rankings` | `GET /rankings` |
+| 내 정보 | `/my-info` | `GET /rankings?nickname=` |
 
 ---
 
@@ -344,3 +488,5 @@ sequenceDiagram
 - [ ] `users` → `ple_match_pick` **1:0..N 비식별** (`||..o{` 점선 · `}o..o{` M:N 아님)
 - [ ] `ple_events` → `ple_matches` · `ple_matches` → `ple_match_pick` **1:0..N 식별** (`||--o{` 실선)
 - [ ] UK: `uq_ple_event_match_key`, `uq_ple_prediction_match_client`, `uq_predictions_match_user`
+- [ ] **Records**: 별도 테이블 없음 · `card_json` + 경기 결과 집계 · `records_scoring` 승패 판정
+- [ ] **Records API**: `GET /records/competitors` · `GET /records/competitors/{name}` · `records_router` → `kayfabe_router` 등록
