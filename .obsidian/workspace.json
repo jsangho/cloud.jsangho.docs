@@ -74,7 +74,8 @@
               "title": "북마크"
             }
           }
-        ]
+        ],
+        "currentTab": 1
       }
     ],
     "direction": "horizontal",
@@ -183,7 +184,7 @@
       "bases:새 베이스 생성하기": false
     }
   },
-  "active": "33a0e9be17da1b7b",
+  "active": "efde4e0b95567514",
   "lastOpenFiles": [
     "DevOps/Backend/ENTITY_RULE.md",
     "DevOps/Backend/KAYFABE_ERD.md",
