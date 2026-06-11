@@ -388,7 +388,7 @@ titanic 앱과 동일한 헥사고날(포트·어댑터) 구조입니다.
 | Schema | `adapter/inbound/api/schemas/` | Pydantic 요청·응답 DTO (`ple`, `ranking`, `result`, **`records`**) |
 | Router 집계 | `adapter/inbound/api/__init__.py` | `kayfabe_router` (5개 v1 라우터) |
 | DIP | `dependencies/*.py` | UseCase 조립 (팩토리) |
-| Input port | `app/ports/input/*_use_case.py` | 유스케이스 인터페이스 |
+| Input port | `app/ports/input/*.py` | 유스케이스 인터페이스 |
 | Interactor | `app/use_cases/*_interactor.py` | 비즈니스 로직 |
 | Output port | `app/ports/output/*_repository.py` | 저장소 인터페이스 |
 | PG adapter | `adapter/outbound/pg/*_pg_repository.py` | Neon CRUD·조회 |
@@ -400,11 +400,11 @@ titanic 앱과 동일한 헥사고날(포트·어댑터) 구조입니다.
 
 | 기능 | Router | dependencies | Input port | Interactor | Output port | PG adapter | Schema |
 |------|--------|--------------|------------|------------|-------------|------------|--------|
-| PLE 쓰기 | `ple_router` | `ple.py` | `ple_use_case` | `ple_interactor` | `ple_repository` | `ple_pg_repository` | `ple_schema` |
-| PLE 조회 | `pleinfo_router` | `pleinfo.py` | `pleinfo_use_case` | `pleinfo_interactor` | `pleinfo_repository` | `pleinfo_pg_repository` | `ple_schema` |
-| 순위 | `ranking_router` | `ranking.py` | `ranking_use_case` | `ranking_interactor` | `ranking_repository`, `ple_repository` | `ranking_pg_repository` | `ranking_schema` |
-| 결과 목록 | `result_router` | `result.py` | `result_use_case` | `result_interactor` | `result_repository` | `result_pg_repository` | `result_schema` |
-| **선수 기록** | **`records_router`** | **`records.py`** | **`records_use_case`** | **`records_interactor`** | **`records_repository`**, `pleinfo_use_case` | **`records_pg_repository`** | **`records_schema`** |
+| PLE 쓰기 | `ple_router` | `ple.py` | `ple` | `ple_interactor` | `ple_repository` | `ple_pg_repository` | `ple_schema` |
+| PLE 조회 | `pleinfo_router` | `pleinfo.py` | `pleinfo` | `pleinfo_interactor` | `pleinfo_repository` | `pleinfo_pg_repository` | `ple_schema` |
+| 순위 | `ranking_router` | `ranking.py` | `ranking` | `ranking_interactor` | `ranking_repository`, `ple_repository` | `ranking_pg_repository` | `ranking_schema` |
+| 결과 목록 | `result_router` | `result.py` | `result` | `result_interactor` | `result_repository` | `result_pg_repository` | `result_schema` |
+| **선수 기록** | **`records_router`** | **`records.py`** | **`records`** | **`records_interactor`** | **`records_repository`**, `pleinfo` | **`records_pg_repository`** | **`records_schema`** |
 
 흐름 (쓰기): **Router → dependencies → Interactor → PgRepository → Neon**  
 흐름 (기록): **records_router → RecordsInteractor → RecordsPgRepository + PleInfoInteractor(get_board)**
