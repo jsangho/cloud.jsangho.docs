@@ -1,6 +1,6 @@
 {
   "collapse-filter": false,
-  "search": "path:www/ OR path:sangho/ OR path:vault/DevOps/ OR file:CLAUDE.md -path:sangho/ -path:www/ file:agent.md file:.cursorrules file:그래프뷰",
+  "search": "path:www/ OR path:frontend/ OR path:sangho/ OR path:backend/ OR path:vault/ OR -path:www/ -path:sangho/ -path:vault/ -path:backend/ -path:frontend/",
   "showTags": false,
   "showAttachments": false,
   "hideUnresolved": true,
@@ -8,43 +8,19 @@
   "collapse-color-groups": false,
   "colorGroups": [
     {
-      "query": "path:sangho/apps/titanic/",
-      "color": { "a": 1, "rgb": 7780274 }
-    },
-    {
-      "query": "path:sangho/apps/kayfabe/",
-      "color": { "a": 1, "rgb": 15583560 }
-    },
-    {
-      "query": "path:sangho/apps/friday13th/",
-      "color": { "a": 1, "rgb": 14767961 }
-    },
-    {
-      "query": "path:sangho/",
-      "color": { "a": 1, "rgb": 5142951 }
-    },
-    {
-      "query": "path:www/",
+      "query": "path:www/ OR path:frontend/",
       "color": { "a": 1, "rgb": 5873999 }
     },
     {
-      "query": "path:vault/DevOps/Backend/",
-      "color": { "a": 1, "rgb": 11565729 }
-    },
-    {
-      "query": "path:vault/케이페이브개발/",
-      "color": { "a": 1, "rgb": 16752039 }
+      "query": "path:sangho/ OR path:backend/",
+      "color": { "a": 1, "rgb": 5142951 }
     },
     {
       "query": "path:vault/",
       "color": { "a": 1, "rgb": 12234924 }
     },
     {
-      "query": "file:agent.md OR file:.cursorrules",
-      "color": { "a": 1, "rgb": 1548984 }
-    },
-    {
-      "query": "file:CLAUDE.md -path:sangho/ -path:www/ -path:vault/",
+      "query": "-path:www/ -path:sangho/ -path:vault/ -path:backend/ -path:frontend/",
       "color": { "a": 1, "rgb": 1548984 }
     }
   ],
