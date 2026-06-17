@@ -59,7 +59,7 @@ dependencies/     ← FastAPI Depends 팩토리
 
 ## 5. DB 엔티티 규칙 (요약)
 
-> 전체 규칙: `_claude/ENTITY_RULE.md`
+> 전체 규칙: `vault/sangho/ENTITY_RULE.md`
 
 - PK: 반드시 `id: int`, auto-increment (UUID · 복합 PK 금지)
 - SQLModel: `id: Optional[int] = Field(default=None, primary_key=True)`
@@ -110,6 +110,25 @@ dependencies/     ← FastAPI Depends 팩토리
 | **ratio** (비율) | 절대적 원점(0) 기준 — 배수 비교 가능 | 나이, 금액, 몸무게 |
 
 > **선택 기준:** 배수 표현이 가능하면 ratio, 순서만 있으면 ordinal, 이름뿐이면 nominal.
+
+---
+
+## 9. async def vs def 선택 기준
+
+메소드가 `await`할 대상이 있는지로만 판단한다.
+
+| 성격 | 형태 | 예시 |
+|------|------|------|
+| I/O-bound (DB 쿼리, 네트워크, LLM 호출) | `async def` | `introduce_myself`, `chat` |
+| CPU-bound (형태소 분석, 수치 연산) | `def` | `analyze_intent`, `train_model` |
+
+**`async def`를 붙여도 CPU 작업은 비블로킹이 되지 않는다.** 코루틴이 될 뿐이며 이벤트 루프를 그대로 점유한다. `async` 표시가 붙어 있어서 비블로킹인 것처럼 보이는 게 더 위험하다.
+
+Kiwi 등 CPU 작업이 실제로 무거워 이벤트 루프 블로킹이 문제가 되면, `async def`로 바꾸는 게 아니라 호출 측에서 스레드풀에 넘긴다.
+
+```python
+result = await asyncio.to_thread(use_case.analyze_intent, question)
+```
 
 ---
 
