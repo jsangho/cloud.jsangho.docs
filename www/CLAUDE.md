@@ -88,3 +88,7 @@ export async function fetchXxx(): Promise<XxxType> {
 | `sangho/apps/kayfabe/_docs/CLAUDE.md` | Kayfabe 전체 HTTP API 명세 |
 | [`_claude/REACT_RULES.md`](_claude/REACT_RULES.md) | useState · FormData · 입력값 노출 금지 규칙 |
 | `agent.md` | useState 객체 압축 패턴 |
+
+## 다크 모드
+
+구현 지침: [`_docs/darkmode-spec.md`](_docs/darkmode-spec.md)
