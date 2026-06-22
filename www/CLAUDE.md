@@ -91,4 +91,4 @@ export async function fetchXxx(): Promise<XxxType> {
 
 ## 다크 모드
 
-구현 지침: [`_docs/darkmode-spec.md`](_docs/darkmode-spec.md)
+구현 지침: [`_docs/darkmode-spec.md`](_docs/darkmode-spec.md) 
