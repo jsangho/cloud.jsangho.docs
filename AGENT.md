@@ -5,10 +5,10 @@
 | 영역 | 코드 경로 | 규칙 문서 |
 |------|-----------|-----------|
 | 프론트엔드 | `www/` | `www/.cursorrules` · `www/_claude/REACT_RULES.md` |
-| 백엔드 | `sangho/` | `sangho/.cursorrules` · `sangho/_claude/ENTITY_RULE.md` · 앱 `_docs/` |
+| 백엔드 | `fastapi/` | `fastapi/.cursorrules` · `fastapi/_claude/ENTITY_RULE.md` · 앱 `_docs/` |
 
 ```text
-  www/* … (프론트)          sangho/* … (백엔드)
+  www/* … (프론트)          fastapi/* … (백엔드)
        \                      /
         공통: .cursorrules · CLAUDE.md · agent.md
 ```
