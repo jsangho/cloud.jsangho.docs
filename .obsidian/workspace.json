@@ -4,11 +4,11 @@
     "type": "split",
     "children": [
       {
-        "id": "99f4669d5146edef",
+        "id": "52b34c310fb97d35",
         "type": "tabs",
         "children": [
           {
-            "id": "95f29eab5b4725c6",
+            "id": "ab97c65a6e8e0f28",
             "type": "leaf",
             "state": {
               "type": "empty",
@@ -176,8 +176,9 @@
       "bases:새 베이스 생성하기": false
     }
   },
-  "active": "95f29eab5b4725c6",
+  "active": "ab97c65a6e8e0f28",
   "lastOpenFiles": [
-    "그래프뷰 색상구분.md"
+    "그래프뷰 색상구분.md",
+    "AGENT.md"
   ]
 }
